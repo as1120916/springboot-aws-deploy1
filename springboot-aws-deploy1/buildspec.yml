@@ -1,0 +1,42 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR....
+      - aws --version
+
+      # Login to ECR
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 606678222086.dkr.ecr.us-east-1.amazonaws.com
+
+      # Variables
+      - REPOSITORY_URI=606678222086.dkr.ecr.us-east-1.amazonaws.com/spring-demo-ecr
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building JAR
+      - mvn clean package
+
+      - echo Building Docker image
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing Docker images
+
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+
+      - echo Writing imagedefinitions.json
+      - DOCKER_CONTAINER_NAME=spring-demo-ecr
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+
+      - cat imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
